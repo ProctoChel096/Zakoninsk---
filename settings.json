@@ -1,0 +1,12 @@
+{
+  "opacity": 0.6,
+  "is_minimized": true,
+  "hotkey": "f9",
+  "window_x": 100,
+  "window_y": 100,
+  "window_width": 500,
+  "window_height": 600,
+  "click_through": false,
+  "game_process_name": "GTA5.exe",
+  "move_hotkey": "f8"
+}

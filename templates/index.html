@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Законинск - Россия Онлайн</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #141414;
+            color: #e0e0e0;
+            overflow-y: auto;
+            height: 100vh;
+            user-select: none;
+        }
+        
+        .container {
+            padding: 10px;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 15px;
+            background: #1a1a1a;
+            border-bottom: 2px solid #cc0000;
+            margin-bottom: 10px;
+            -webkit-app-region: drag;
+            cursor: move;
+            min-height: 50px;
+        }
+        
+        .title {
+            font-size: 18px;
+            font-weight: bold;
+            color: #ffffff;
+            letter-spacing: 0.5px;
+        }
+        
+        .title span {
+            color: #ff4444;
+        }
+        
+        .version-badge {
+            font-size: 11px;
+            color: #888;
+            background: #333;
+            padding: 3px 8px;
+            border-radius: 10px;
+            letter-spacing: 0.5px;
+        }
+        
+        .window-controls {
+            display: flex;
+            gap: 6px;
+            -webkit-app-region: no-drag;
+        }
+        
+        .control-btn {
+            width: 30px;
+            height: 30px;
+            border: none;
+            background: #333;
+            color: white;
+            cursor: pointer;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s;
+            padding: 0;
+        }
+        
+        .control-btn:hover {
+            background: #555;
+        }
+        
+        .control-btn.close:hover {
+            background: #cc0000;
+        }
+        
+        .search-bar {
+            padding: 10px;
+            background: #1a1a1a;
+            margin-bottom: 10px;
+            border: 1px solid #333;
+        }
+        
+        .search-input {
+            width: 100%;
+            padding: 12px 15px;
+            font-size: 15px;
+            background: #2a2a2a;
+            border: 2px solid #555;
+            color: #e0e0e0;
+            transition: all 0.3s;
+            -webkit-app-region: no-drag;
+        }
+        
+        .search-input:focus {
+            outline: none;
+            border-color: #cc0000;
+            box-shadow: 0 0 15px rgba(204,0,0,0.3);
+        }
+        
+        .search-info {
+            font-size: 12px;
+            color: #888;
+            margin-top: 5px;
+            text-align: center;
+        }
+        
+        .content-area {
+            flex: 1;
+            overflow-y: auto;
+            padding: 0 5px;
+        }
+        
+        .results-header {
+            font-size: 16px;
+            font-weight: bold;
+            color: #ff4444;
+            margin-bottom: 15px;
+            padding: 10px;
+            background: #1a1a1a;
+            border-left: 4px solid #cc0000;
+        }
+        
+        .penalty-card {
+            background: #2a2a2a;
+            padding: 15px;
+            border-left: 4px solid #cc0000;
+            margin-bottom: 10px;
+            transition: all 0.2s;
+        }
+        
+        .penalty-card:hover {
+            background: #303030;
+            transform: translateX(3px);
+            box-shadow: 0 3px 6px rgba(0,0,0,0.3);
+        }
+        
+        .penalty-article {
+            font-weight: bold;
+            color: #ff6600;
+            font-size: 16px;
+            margin-bottom: 8px;
+            display: block;
+        }
+        
+        .penalty-violation {
+            margin-bottom: 10px;
+            line-height: 1.5;
+            font-size: 14px;
+            color: #ddd;
+        }
+        
+        .penalty-amount {
+            color: #ff3333;
+            font-weight: bold;
+            font-size: 16px;
+            padding: 10px;
+            background: #1a1a1a;
+            border-left: 3px solid #ff3333;
+            margin-bottom: 8px;
+        }
+        
+        .penalty-exception {
+            color: #ffaa00;
+            font-size: 12px;
+            font-style: italic;
+            padding: 8px;
+            background: #1a1a1a;
+            margin-top: 5px;
+        }
+        
+        .penalty-section {
+            font-size: 11px;
+            color: #888;
+            margin-bottom: 5px;
+            text-transform: uppercase;
+        }
+        
+        .no-results {
+            text-align: center;
+            padding: 40px;
+            font-size: 18px;
+            color: #888;
+        }
+        
+        .highlight {
+            background: #ffeb3b;
+            color: #000;
+            padding: 1px 3px;
+            font-weight: bold;
+        }
+        
+        ::-webkit-scrollbar {
+            width: 10px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: #1a1a1a;
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: #444;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: #666;
+        }
+        
+        .settings-panel {
+            display: none;
+            position: fixed;
+            top: 60px;
+            right: 10px;
+            background: #1e1e1e;
+            border: 1px solid #555;
+            padding: 15px;
+            z-index: 1000;
+            min-width: 220px;
+        }
+        
+        .settings-panel.active {
+            display: block;
+        }
+        
+        .settings-title {
+            font-size: 14px;
+            font-weight: bold;
+            color: #ff4444;
+            margin-bottom: 15px;
+        }
+        
+        .setting-item {
+            margin-bottom: 10px;
+        }
+        
+        .setting-label {
+            font-size: 12px;
+            color: #ddd;
+            margin-bottom: 5px;
+            display: block;
+        }
+        
+        .setting-select {
+            width: 100%;
+            padding: 8px 10px;
+            background: #2a2a2a;
+            border: 1px solid #555;
+            color: #e0e0e0;
+            font-size: 13px;
+            cursor: pointer;
+            -webkit-app-region: no-drag;
+        }
+        
+        .setting-select:focus {
+            outline: none;
+            border-color: #cc0000;
+        }
+        
+        .setting-select option {
+            background: #2a2a2a;
+            color: #e0e0e0;
+        }
+        
+        .mini-window {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #1a1a1a;
+            z-index: 999;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .mini-window.active {
+            display: flex;
+        }
+        
+        .mini-hint {
+            color: #888;
+            font-size: 12px;
+            text-align: center;
+        }
+        
+        .mini-hotkey {
+            color: #ff4444;
+            font-weight: bold;
+            font-size: 14px;
+            text-transform: uppercase;
+        }
+        
+        /* Подсказка по хоткеям */
+        .hotkeys-hint {
+            padding: 8px 10px;
+            background: #1a1a1a;
+            border-top: 1px solid #2a2a2a;
+            margin-top: 5px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 15px;
+            flex-wrap: wrap;
+            font-size: 11px;
+        }
+        
+        .hotkey-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            color: #888;
+        }
+        
+        .hotkey-key {
+            background: #2a2a2a;
+            color: #ff4444;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-weight: bold;
+            font-size: 10px;
+            letter-spacing: 0.5px;
+            border: 1px solid #444;
+        }
+        
+        .hotkey-desc {
+            color: #999;
+        }
+        
+        .copyright {
+            padding: 5px 10px;
+            text-align: center;
+            font-size: 10px;
+            color: #555;
+            letter-spacing: 0.5px;
+            border-top: 1px solid #2a2a2a;
+            margin-top: 5px;
+            user-select: text;
+        }
+        
+        .copyright span {
+            color: #777;
+        }
+        
+        /* Оверлей для закрытия */
+        .goodbye-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 2000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(5px);
+            -webkit-backdrop-filter: blur(5px);
+        }
+        
+        .goodbye-overlay.active {
+            display: flex;
+        }
+        
+        .goodbye-text {
+            font-size: 48px;
+            font-weight: bold;
+            color: #ff4444;
+            text-shadow: 0 0 20px rgba(204, 0, 0, 0.8);
+            animation: goodbyeAnimation 1s ease-in-out;
+            letter-spacing: 2px;
+        }
+        
+        @keyframes goodbyeAnimation {
+            0% {
+                opacity: 0;
+                transform: scale(0.5);
+            }
+            50% {
+                opacity: 1;
+                transform: scale(1.2);
+            }
+            100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Оверлей "Удачи!" -->
+    <div class="goodbye-overlay" id="goodbyeOverlay">
+        <div class="goodbye-text">Удачи!</div>
+    </div>
+    
+    <div class="mini-window" id="miniWindow">
+        <div class="mini-hint">
+            Нажмите <span class="mini-hotkey" id="hotkeyDisplay">F9</span><br>
+            для открытия
+        </div>
+        <div class="copyright" style="position: absolute; bottom: 5px; width: 100%; border: none;">
+            media by: <span>EG</span> | created by: <span>prostochel096</span>
+        </div>
+    </div>
+    
+    <div class="container" id="mainWindow">
+        <div class="header">
+            <div class="title">📋 <span>Законинск</span></div>
+            <div class="version-badge" id="versionDisplay">v1.0.0</div>
+            <div class="window-controls">
+                <button class="control-btn" onclick="toggleSettings()" title="Настройки">⚙</button>
+                <button class="control-btn" onclick="minimizeWindow()" title="Свернуть">─</button>
+                <button class="control-btn close" onclick="closeWindow()" title="Закрыть">✕</button>
+            </div>
+        </div>
+        
+        <div class="settings-panel" id="settingsPanel">
+            <div class="settings-title">⚙ Настройки</div>
+            
+            <div class="setting-item">
+                <label class="setting-label" for="opacitySelect">Прозрачность окна:</label>
+                <select class="setting-select" id="opacitySelect" onchange="updateOpacity(this.value)">
+                    <option value="1.00">100% (непрозрачное)</option>
+                    <option value="0.95">95%</option>
+                    <option value="0.90">90%</option>
+                    <option value="0.85">85%</option>
+                    <option value="0.80">80%</option>
+                    <option value="0.75">75%</option>
+                    <option value="0.70">70%</option>
+                    <option value="0.65">65%</option>
+                    <option value="0.60">60%</option>
+                    <option value="0.55">55%</option>
+                    <option value="0.50">50%</option>
+                    <option value="0.45">45%</option>
+                    <option value="0.40">40%</option>
+                </select>
+            </div>
+        </div>
+        
+        <div class="search-bar">
+            <input 
+                type="text" 
+                class="search-input" 
+                id="searchInput" 
+                placeholder="🔍 Поиск по штрафам..."
+                autocomplete="off"
+            >
+            <div class="search-info">Например: "Ст. 12", "алкоголь", "тонировка", "5000"</div>
+        </div>
+        
+        <div class="content-area" id="content"></div>
+        
+        <!-- Подсказка по хоткеям -->
+        <div class="hotkeys-hint">
+            <div class="hotkey-item">
+                <span class="hotkey-key">F9</span>
+                <span class="hotkey-desc">Свернуть/Развернуть</span>
+            </div>
+            <div class="hotkey-item">
+                <span class="hotkey-key">F10</span>
+                <span class="hotkey-desc">Использовать окно</span>
+            </div>
+        </div>
+        
+        <div class="copyright">
+            media by: <span>EG</span> | created by: <span>prostochel096</span>
+        </div>
+    </div>
+    
+    <script>
+        let penaltiesData = [];
+        let settings = {
+            opacity: 0.85,
+            is_minimized: false,
+            hotkey: 'f9'
+        };
+        
+        function loadVersion() {
+            fetch('/api/version')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('versionDisplay').textContent = 'v' + data.version;
+                })
+                .catch(() => {
+                    document.getElementById('versionDisplay').textContent = 'v1.0.0';
+                });
+        }
+        
+        function minimizeWindow() {
+            document.getElementById('mainWindow').style.display = 'none';
+            document.getElementById('miniWindow').classList.add('active');
+            settings.is_minimized = true;
+            fetch('/api/minimize');
+        }
+        
+        function maximizeWindow() {
+            document.getElementById('miniWindow').classList.remove('active');
+            document.getElementById('mainWindow').style.display = 'flex';
+            settings.is_minimized = false;
+            fetch('/api/maximize');
+            setTimeout(() => {
+                document.getElementById('searchInput').focus();
+            }, 100);
+        }
+        
+        function toggleMinimizedState(isMinimized) {
+            if (isMinimized) {
+                document.getElementById('mainWindow').style.display = 'none';
+                document.getElementById('miniWindow').classList.add('active');
+            } else {
+                document.getElementById('miniWindow').classList.remove('active');
+                document.getElementById('mainWindow').style.display = 'flex';
+                setTimeout(() => {
+                    document.getElementById('searchInput').focus();
+                }, 100);
+            }
+        }
+        
+        function closeWindow() {
+            // Показываем оверлей "Удачи!"
+            const overlay = document.getElementById('goodbyeOverlay');
+            overlay.classList.add('active');
+            
+            // Через 1.5 секунды закрываем приложение
+            setTimeout(() => {
+                fetch('/api/close_window')
+                    .then(() => {
+                        if (window.pywebview) {
+                            window.pywebview.api.close();
+                        }
+                    })
+                    .catch(() => {
+                        // Если fetch не сработал, пробуем закрыть напрямую
+                        if (window.pywebview) {
+                            window.pywebview.api.close();
+                        }
+                    });
+            }, 1500);
+        }
+        
+        function toggleSettings() {
+            const panel = document.getElementById('settingsPanel');
+            panel.classList.toggle('active');
+        }
+        
+        function updateOpacity(value) {
+            console.log('Opacity changed to:', value);
+            settings.opacity = parseFloat(value);
+            
+            fetch('/api/settings', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    opacity: parseFloat(value)
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Settings saved:', data);
+            })
+            .catch(error => {
+                console.error('Error saving settings:', error);
+            });
+        }
+        
+        function loadSettings() {
+            fetch('/api/settings')
+                .then(response => response.json())
+                .then(data => {
+                    settings = data;
+                    
+                    const opacitySelect = document.getElementById('opacitySelect');
+                    const opacityValue = data.opacity;
+                    const roundedOpacity = Math.round(opacityValue * 20) / 20;
+                    opacitySelect.value = roundedOpacity.toFixed(2);
+                    
+                    const hotkeyDisplay = data.hotkey ? data.hotkey.toUpperCase() : 'F9';
+                    document.getElementById('hotkeyDisplay').textContent = hotkeyDisplay;
+                    
+                    if (data.is_minimized) {
+                        document.getElementById('mainWindow').style.display = 'none';
+                        document.getElementById('miniWindow').classList.add('active');
+                    }
+                });
+        }
+        
+        function highlightText(text, query) {
+            if (!query) return text;
+            const regex = new RegExp(`(${query})`, 'gi');
+            return text.replace(regex, '<span class="highlight">$1</span>');
+        }
+        
+        function renderPenaltyCard(penalty, query = '') {
+            let html = '<div class="penalty-card">';
+            
+            if (penalty._section) {
+                html += `<div class="penalty-section">${highlightText(penalty._section, query)}</div>`;
+            }
+            
+            if (penalty.статья) {
+                html += `<span class="penalty-article">${highlightText(penalty.статья, query)}</span>`;
+            }
+            
+            if (penalty.нарушение) {
+                html += `<div class="penalty-violation">${highlightText(penalty.нарушение, query)}</div>`;
+            }
+            
+            if (penalty.наказание) {
+                html += `<div class="penalty-amount">💰 ${highlightText(penalty.наказание, query)}</div>`;
+            }
+            
+            if (penalty.исключение) {
+                html += `<div class="penalty-exception">⚠️ ${highlightText(penalty.исключение, query)}</div>`;
+            }
+            
+            if (penalty.детали && Array.isArray(penalty.детали)) {
+                html += '<div style="margin-top: 10px;">';
+                html += '<div style="font-weight: bold; color: #ff6666; margin-bottom: 5px;">Детали:</div>';
+                penalty.детали.forEach(detail => {
+                    html += `
+                        <div style="padding: 5px; background: #1a1a1a; margin-bottom: 5px;">
+                            ${detail.скорость ? `<div><strong>${highlightText(detail.скорость, query)}</strong></div>` : ''}
+                            ${detail.наказание ? `<div style="color: #ff3333;">💰 ${highlightText(detail.наказание, query)}</div>` : ''}
+                        </div>
+                    `;
+                });
+                html += '</div>';
+            }
+            
+            html += '</div>';
+            return html;
+        }
+        
+        function renderPenalties(penalties, query = '') {
+            if (penalties.length === 0) {
+                return '<div class="no-results">🔍 Штрафы не найдены</div>';
+            }
+            
+            let html = `<div class="results-header">💰 Найдено штрафов: ${penalties.length}</div>`;
+            
+            penalties.forEach(penalty => {
+                html += renderPenaltyCard(penalty, query);
+            });
+            
+            return html;
+        }
+        
+        function loadPenalties(query = '') {
+            const content = document.getElementById('content');
+            const url = query ? `/api/search_penalties?q=${encodeURIComponent(query)}` : '/api/penalties';
+            
+            fetch(url)
+                .then(response => response.json())
+                .then(data => {
+                    penaltiesData = data;
+                    content.innerHTML = renderPenalties(data, query);
+                })
+                .catch(error => {
+                    content.innerHTML = `<div class="no-results">Ошибка: ${error.message}</div>`;
+                });
+        }
+        
+        let searchTimeout;
+        document.getElementById('searchInput').addEventListener('input', function(e) {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
+                loadPenalties(e.target.value);
+            }, 300);
+        });
+        
+        loadVersion();
+        loadSettings();
+        loadPenalties();
+        
+        document.addEventListener('keydown', function(e) {
+            if (e.ctrlKey && e.key === 'f') {
+                e.preventDefault();
+                document.getElementById('searchInput').focus();
+            }
+            if (e.key === 'Escape') {
+                document.getElementById('searchInput').value = '';
+                loadPenalties();
+                document.getElementById('searchInput').blur();
+                document.getElementById('settingsPanel').classList.remove('active');
+            }
+        });
+    </script>
+</body>
+</html>

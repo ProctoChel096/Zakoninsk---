@@ -1,0 +1,4 @@
+flask
+pywebview
+pywin32
+psutil
