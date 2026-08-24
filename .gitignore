@@ -184,3 +184,4 @@ output/
 venv/
 build.bat
 f.iss
+settings.json
