@@ -182,5 +182,5 @@ cython_debug/
 
 output/
 venv/
-bulld.bat
+build.bat
 f.iss
