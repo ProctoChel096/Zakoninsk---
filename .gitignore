@@ -185,3 +185,6 @@ venv/
 build.bat
 f.iss
 settings.json
+cache/
+в
+favorites.json

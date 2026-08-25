@@ -4,11 +4,8 @@ import webview
 from flask import Flask, render_template, request, jsonify
 import win32gui
 import win32con
-import win32process
-import psutil
 import time
 import ctypes
-import win32api
 import keyboard
 import os
 import sys
@@ -16,9 +13,11 @@ import logging
 import socket
 import tkinter as tk
 from tkinter import ttk
+import requests
 
 # Константы в начале
-APP_VERSION = '24.08.26#002-STABLE'
+APP_VERSION = '25.08.26#006-STABLE'
+REMOTE_BASE_URL = 'https://53c18a72091d.hosting.myjino.ru/Zakoninsk/lists/'
 
 def setup_logging():
     if getattr(sys, 'frozen', False):
@@ -54,17 +53,15 @@ class LoadingWindow:
         y = (screen_height - 150) // 2
         self.root.geometry(f"300x150+{x}+{y}")
         
-        # Красная полоска сверху
         top_bar = tk.Frame(self.root, bg='#cc0000', height=3)
         top_bar.pack(side='top', fill='x')
         
-        # Заголовок
         title_frame = tk.Frame(self.root, bg='#1a1a1a')
         title_frame.pack(fill='x', pady=(15, 5))
         
         title_label = tk.Label(
             title_frame, 
-            text="📋 Законинск", 
+            text="Законинск", 
             font=('Segoe UI', 16, 'bold'),
             fg='#ffffff',
             bg='#1a1a1a'
@@ -80,7 +77,6 @@ class LoadingWindow:
         )
         version_label.pack()
         
-        # Статус загрузки
         self.status_label = tk.Label(
             self.root,
             text="Запуск...",
@@ -90,7 +86,6 @@ class LoadingWindow:
         )
         self.status_label.pack(pady=(5, 5))
         
-        # Прогресс-бар
         style = ttk.Style()
         style.theme_use('clam')
         style.configure(
@@ -111,7 +106,6 @@ class LoadingWindow:
         self.progress.pack(pady=(5, 10))
         self.progress.start(15)
         
-        # Копирайт
         copyright_label = tk.Label(
             self.root,
             text="media by: EG | created by: prostochel096",
@@ -122,7 +116,6 @@ class LoadingWindow:
         copyright_label.pack(side='bottom', pady=5)
     
     def update_status(self, text):
-        """Обновляет текст статуса"""
         try:
             if self.root and self.root.winfo_exists():
                 self.status_label.config(text=text)
@@ -132,7 +125,6 @@ class LoadingWindow:
             pass
     
     def close(self):
-        """Закрывает окно загрузки"""
         try:
             if self.root:
                 self.progress.stop()
@@ -150,19 +142,93 @@ app = Flask(__name__,
             template_folder=os.path.join(BASE_DIR, 'templates'),
             static_folder=os.path.join(BASE_DIR, 'static'))
 
+# Файлы для локального кэша
 if getattr(sys, 'frozen', False):
     SETTINGS_FILE = os.path.join(os.path.dirname(sys.executable), 'settings.json')
-    DATA_FILE = os.path.join(BASE_DIR, 'data.json')
+    FAVORITES_FILE = os.path.join(os.path.dirname(sys.executable), 'favorites.json')
+    CACHE_DIR = os.path.join(os.path.dirname(sys.executable), 'cache')
 else:
     SETTINGS_FILE = os.path.join(BASE_DIR, 'settings.json')
-    DATA_FILE = os.path.join(BASE_DIR, 'data.json')
+    FAVORITES_FILE = os.path.join(BASE_DIR, 'favorites.json')
+    CACHE_DIR = os.path.join(BASE_DIR, 'cache')
 
-try:
-    with open(DATA_FILE, 'r', encoding='utf-8') as f:
-        LAW_DATA = json.load(f)
-except Exception as e:
-    logger.error(f"Error loading data: {e}")
-    LAW_DATA = {}
+# Создаем директорию для кэша
+os.makedirs(CACHE_DIR, exist_ok=True)
+
+CACHE_FILES = {
+    'DK': os.path.join(CACHE_DIR, 'DK.json'),
+    'miranda': os.path.join(CACHE_DIR, 'miranda.json'),
+    'tips': os.path.join(CACHE_DIR, 'tips.json')
+}
+
+def load_remote_json(filename):
+    """Загружает JSON с удаленного сервера или из кэша"""
+    cache_file = CACHE_FILES.get(filename)
+    remote_url = f"{REMOTE_BASE_URL}{filename}.json"
+    
+    try:
+        # Пробуем загрузить с сервера
+        logger.info(f"Loading {filename}.json from remote server...")
+        response = requests.get(remote_url, timeout=10)
+        
+        if response.status_code == 200:
+            data = response.json()
+            
+            # Сохраняем в кэш
+            if cache_file:
+                try:
+                    with open(cache_file, 'w', encoding='utf-8') as f:
+                        json.dump(data, f, ensure_ascii=False, indent=2)
+                    logger.info(f"{filename}.json cached successfully")
+                except Exception as e:
+                    logger.error(f"Error caching {filename}.json: {e}")
+            
+            return data
+        else:
+            logger.warning(f"Remote server returned {response.status_code} for {filename}.json")
+            
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Error loading {filename}.json from remote: {e}")
+    except json.JSONDecodeError as e:
+        logger.error(f"Error parsing {filename}.json from remote: {e}")
+    
+    # Если не удалось загрузить с сервера, пробуем кэш
+    if cache_file and os.path.exists(cache_file):
+        try:
+            logger.info(f"Loading {filename}.json from cache...")
+            with open(cache_file, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception as e:
+            logger.error(f"Error loading {filename}.json from cache: {e}")
+    
+    # Возвращаем данные по умолчанию
+    logger.warning(f"Using default data for {filename}.json")
+    return get_default_data(filename)
+
+def get_default_data(filename):
+    """Возвращает данные по умолчанию для разных файлов"""
+    if filename == 'DK':
+        return {"кодекс": "Дорожный кодекс России Онлайн", "версия": APP_VERSION, "главы": []}
+    elif filename == 'miranda':
+        return {
+            "text": "Вы имеете право хранить молчание. Всё, что вы скажете, может быть использовано против вас в суде. Вы имеете право на адвоката. Если вы не можете позволить себе адвоката, он будет предоставлен вам бесплатно."
+        }
+    elif filename == 'tips':
+        return [
+            {"text": "Всегда зачитывайте права Миранды при задержании"},
+            {"text": "Проверяйте документы у подозреваемого"},
+            {"text": "Не забывайте про ордер на обыск"},
+            {"text": "Фиксируйте все доказательства"},
+            {"text": "Соблюдайте процедуру ареста"}
+        ]
+    return {}
+
+# Загрузка данных с сервера
+logger.info("Loading data from remote server...")
+LAW_DATA = load_remote_json('DK')
+MIRANDA_DATA = load_remote_json('miranda')
+TIPS_DATA = load_remote_json('tips')
+logger.info("Data loaded successfully")
 
 DEFAULT_SETTINGS = {
     'opacity': 0.85,
@@ -170,11 +236,10 @@ DEFAULT_SETTINGS = {
     'hotkey': 'f9',
     'window_x': 100,
     'window_y': 100,
-    'window_width': 500,
+    'window_width': 900,
     'window_height': 600,
-    'click_through': True,  # По умолчанию включено для игры
-    'game_process_name': 'GTA5.exe',  # Имя процесса игры
-    'move_hotkey': 'f8'  # Горячая клавиша для перемещения
+    'click_through': False,
+    'move_hotkey': 'f8'
 }
 
 def load_settings():
@@ -196,7 +261,36 @@ def save_settings_to_file():
     except Exception as e:
         logger.error(f"Error saving settings: {e}")
 
+def load_favorites():
+    """Загружает избранные номера статей из файла"""
+    try:
+        if os.path.exists(FAVORITES_FILE):
+            with open(FAVORITES_FILE, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                # Если favorites.json содержит список строк (номера статей)
+                if isinstance(data, list):
+                    return data
+                # Если favorites.json содержит список объектов (старый формат)
+                elif isinstance(data, dict) and 'articles' in data:
+                    return data['articles']
+                else:
+                    return []
+    except Exception as e:
+        logger.error(f"Error loading favorites: {e}")
+    return []
+
+def save_favorites(favorites):
+    """Сохраняет избранные номера статей в файл"""
+    try:
+        with open(FAVORITES_FILE, 'w', encoding='utf-8') as f:
+            json.dump(favorites, f, ensure_ascii=False, indent=2)
+        return True
+    except Exception as e:
+        logger.error(f"Error saving favorites: {e}")
+        return False
+
 SETTINGS = load_settings()
+FAVORITES = load_favorites()  # Теперь это список номеров статей (строки)
 
 def find_free_port():
     for port in range(5000, 6000):
@@ -208,7 +302,7 @@ def find_free_port():
 
 PORT = find_free_port()
 overlay_hwnd = None
-is_moving_mode = False  # Режим перемещения окна
+is_moving_mode = False
 
 def set_window_opacity(hwnd, opacity):
     try:
@@ -227,7 +321,6 @@ def set_window_opacity(hwnd, opacity):
         return False
 
 def set_click_through(hwnd, enabled):
-    """Включает или выключает click-through для окна"""
     try:
         GWL_EXSTYLE = -20
         WS_EX_TRANSPARENT = 0x00000020
@@ -245,10 +338,8 @@ def set_click_through(hwnd, enabled):
             style &= ~WS_EX_NOACTIVATE
         
         ctypes.windll.user32.SetWindowLongW(hwnd, GWL_EXSTYLE, style)
-        
-        # Обновляем окно
         ctypes.windll.user32.SetWindowPos(hwnd, 0, 0, 0, 0, 0, 
-                                       0x0001 | 0x0002 | 0x0020)  # SWP_NOMOVE | SWP_NOSIZE | SWP_FRAMECHANGED
+                                       0x0001 | 0x0002 | 0x0020)
         return True
     except Exception as e:
         logger.error(f"Error setting click-through: {e}")
@@ -278,7 +369,6 @@ def find_overlay_window():
 
 def apply_opacity_to_window():
     global overlay_hwnd
-    
     hwnd = find_overlay_window()
     if hwnd:
         opacity = SETTINGS.get('opacity', 0.85)
@@ -287,81 +377,65 @@ def apply_opacity_to_window():
     return False
 
 def apply_click_through_to_window():
-    """Применяет настройку click-through к окну"""
     global overlay_hwnd, is_moving_mode
-    
     hwnd = find_overlay_window()
     if hwnd:
-        # Если режим перемещения включен, отключаем click-through
-        click_through = SETTINGS.get('click_through', True) and not is_moving_mode
+        click_through = SETTINGS.get('click_through', False) and not is_moving_mode
         set_click_through(hwnd, click_through)
         return True
     return False
 
-def is_game_running():
-    """Проверяет, запущен ли процесс игры"""
-    try:
-        game_process_name = SETTINGS.get('game_process_name', 'GTA5.exe')
-        for proc in psutil.process_iter(['name']):
-            if proc.info['name'] and proc.info['name'].lower() == game_process_name.lower():
-                return True
-        return False
-    except:
-        return False
-
-def is_game_active():
-    """Проверяет, активно ли окно игры"""
-    try:
-        hwnd = win32gui.GetForegroundWindow()
-        if hwnd:
-            # Получаем PID процесса окна
-            _, pid = win32process.GetWindowThreadProcessId(hwnd)
-            try:
-                process = psutil.Process(pid)
-                process_name = process.name()
-                
-                # Проверяем, является ли активное окно игрой
-                game_process_name = SETTINGS.get('game_process_name', 'GTA5.exe')
-                if process_name.lower() == game_process_name.lower():
-                    return True
-            except:
-                pass
-            
-            # Также проверяем заголовок окна
-            title = win32gui.GetWindowText(hwnd)
-            if any(keyword in title.lower() for keyword in ['gta', 'grand theft auto', 'rockstar']):
-                return True
-    except:
-        pass
-    return False
-
 def extract_penalties(data):
+    """Извлекает все статьи с наказаниями из структурированного JSON"""
     penalties = []
-    def recursive_extract(obj, section_name=''):
-        if isinstance(obj, list):
-            for item in obj:
-                if isinstance(item, dict) and item.get('наказание'):
-                    penalty_item = item.copy()
-                    penalty_item['_section'] = section_name
-                    penalties.append(penalty_item)
-                elif isinstance(item, dict):
-                    recursive_extract(item, section_name)
-        elif isinstance(obj, dict):
-            for key, value in obj.items():
-                if key == 'заголовок':
-                    section_name = value
-                recursive_extract(value, section_name)
     
-    recursive_extract(data)
+    def process_article(article, chapter_name):
+        if not isinstance(article, dict):
+            return
+        
+        # Проверяем наличие наказания или штрафов
+        if 'наказание' in article or 'штрафы' in article:
+            penalty_item = {
+                'статья': f"Ст. {article.get('номер', '?')}",
+                'номер_статьи': article.get('номер', '?'),
+                'глава': chapter_name,
+                'нарушение': article.get('текст', ''),
+                'наказание': article.get('наказание', ''),
+                'исключение': article.get('исключение', ''),
+                'примечание': article.get('примечание', '')
+            }
+            
+            # Обработка штрафов за скорость (статья 39)
+            if 'штрафы' in article:
+                penalty_item['детали'] = article['штрафы']
+            
+            # Обработка деталей
+            if 'детали' in article and isinstance(article['детали'], list):
+                penalty_item['детали'] = article['детали']
+            
+            penalties.append(penalty_item)
     
-    unique = []
-    seen = set()
-    for p in penalties:
-        key = json.dumps(p, ensure_ascii=False)
-        if key not in seen:
-            seen.add(key)
-            unique.append(p)
-    return unique
+    # Проходим по всем главам
+    if isinstance(data, dict) and 'главы' in data:
+        for chapter in data['главы']:
+            if isinstance(chapter, dict) and 'статьи' in chapter:
+                chapter_name = chapter.get('название', '')
+                for article in chapter['статьи']:
+                    process_article(article, chapter_name)
+    
+    return penalties
+
+def get_favorite_penalties():
+    """Возвращает полные данные избранных статей по их номерам"""
+    all_penalties = extract_penalties(LAW_DATA)
+    favorite_penalties = []
+    
+    for penalty in all_penalties:
+        article_number = penalty.get('номер_статьи', '')
+        if article_number in FAVORITES:
+            favorite_penalties.append(penalty)
+    
+    return favorite_penalties
 
 @app.route('/')
 def index():
@@ -375,6 +449,13 @@ def get_version():
 def get_penalties():
     return jsonify(extract_penalties(LAW_DATA))
 
+@app.route('/api/chapters')
+def get_chapters():
+    """Возвращает все главы"""
+    if isinstance(LAW_DATA, dict) and 'главы' in LAW_DATA:
+        return jsonify(LAW_DATA['главы'])
+    return jsonify([])
+
 @app.route('/api/search_penalties')
 def search_penalties():
     query = request.args.get('q', '').lower()
@@ -382,6 +463,91 @@ def search_penalties():
     if not query:
         return jsonify(penalties)
     return jsonify([p for p in penalties if query in json.dumps(p, ensure_ascii=False).lower()])
+
+@app.route('/api/refresh_data', methods=['POST'])
+def refresh_data():
+    """Обновляет данные с сервера"""
+    global LAW_DATA, MIRANDA_DATA, TIPS_DATA
+    
+    try:
+        LAW_DATA = load_remote_json('DK')
+        MIRANDA_DATA = load_remote_json('miranda')
+        TIPS_DATA = load_remote_json('tips')
+        return jsonify({'success': True, 'message': 'Данные обновлены'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)})
+
+@app.route('/api/favorites', methods=['GET', 'POST', 'DELETE'])
+def handle_favorites():
+    global FAVORITES
+    
+    if request.method == 'GET':
+        # Возвращаем полные данные избранных статей
+        favorite_penalties = get_favorite_penalties()
+        return jsonify(favorite_penalties)
+    
+    elif request.method == 'POST':
+        data = request.json
+        
+        # Если пришел список номеров статей
+        if data and isinstance(data, list):
+            # Проверяем, что все элементы - строки (номера статей)
+            if all(isinstance(item, str) for item in data):
+                FAVORITES = data
+                save_favorites(FAVORITES)
+                return jsonify({'success': True, 'favorites': FAVORITES})
+            # Если пришли объекты (старый формат), конвертируем
+            else:
+                FAVORITES = []
+                for item in data:
+                    if isinstance(item, dict) and 'номер_статьи' in item:
+                        FAVORITES.append(item['номер_статьи'])
+                    elif isinstance(item, dict) and 'статья' in item:
+                        # Извлекаем номер из строки "Ст. 12"
+                        article_str = item['статья']
+                        if 'Ст. ' in article_str:
+                            number = article_str.replace('Ст. ', '').strip()
+                            FAVORITES.append(number)
+                save_favorites(FAVORITES)
+                return jsonify({'success': True, 'favorites': FAVORITES})
+        
+        # Если пришел объект с номером статьи
+        elif data and isinstance(data, dict):
+            article_number = data.get('номер_статьи') or data.get('статья', '')
+            
+            # Если передана строка "Ст. 12", извлекаем номер
+            if isinstance(article_number, str) and 'Ст. ' in article_number:
+                article_number = article_number.replace('Ст. ', '').strip()
+            
+            if article_number and article_number not in FAVORITES:
+                FAVORITES.append(article_number)
+                save_favorites(FAVORITES)
+                return jsonify({'success': True, 'favorites': FAVORITES})
+            return jsonify({'success': False, 'message': 'Already in favorites or invalid data'})
+        
+    elif request.method == 'DELETE':
+        data = request.json
+        if data:
+            article_number = data.get('номер_статьи') or data.get('статья', '')
+            
+            # Если передана строка "Ст. 12", извлекаем номер
+            if isinstance(article_number, str) and 'Ст. ' in article_number:
+                article_number = article_number.replace('Ст. ', '').strip()
+            
+            if article_number in FAVORITES:
+                FAVORITES.remove(article_number)
+                save_favorites(FAVORITES)
+                return jsonify({'success': True, 'favorites': FAVORITES})
+    
+    return jsonify({'success': False, 'message': 'Invalid request'})
+
+@app.route('/api/miranda')
+def get_miranda():
+    return jsonify(MIRANDA_DATA)
+
+@app.route('/api/tips')
+def get_tips():
+    return jsonify(TIPS_DATA)
 
 @app.route('/api/settings', methods=['GET', 'POST'])
 def handle_settings():
@@ -400,7 +566,6 @@ def handle_settings():
 
 @app.route('/api/toggle_click_through', methods=['POST'])
 def toggle_click_through():
-    """Переключает режим click-through"""
     global SETTINGS
     SETTINGS['click_through'] = not SETTINGS.get('click_through', False)
     save_settings_to_file()
@@ -409,7 +574,6 @@ def toggle_click_through():
 
 @app.route('/api/toggle_moving_mode', methods=['POST'])
 def toggle_moving_mode():
-    """Переключает режим перемещения окна"""
     global is_moving_mode
     is_moving_mode = not is_moving_mode
     apply_click_through_to_window()
@@ -432,13 +596,13 @@ def maximize_window():
 @app.route('/api/close_window')
 def close_window():
     save_settings_to_file()
+    save_favorites(FAVORITES)
     os._exit(0)
     return jsonify({'success': True})
 
 class GTAOverlay:
     def __init__(self):
         self.window = None
-        self.is_game_was_active = False
         
     def start_flask(self):
         def run_flask():
@@ -459,15 +623,14 @@ class GTAOverlay:
         
         url = f'http://127.0.0.1:{PORT}'
         
-        # Закрываем окно загрузки
         if loading_window:
             loading_window.close()
         
         self.window = webview.create_window(
             'Законинск - Россия Онлайн',
             url,
-            width=600,
-            height=500,
+            width=900,
+            height=600,
             x=SETTINGS.get('window_x', 100),
             y=SETTINGS.get('window_y', 100),
             resizable=True,
@@ -475,7 +638,7 @@ class GTAOverlay:
             on_top=True,
             transparent=False,
             background_color='#1a1a1a',
-            easy_drag=True  # Включаем easy_drag
+            easy_drag=True
         )
         
         webview.start(self.on_webview_started, debug=False)
@@ -504,68 +667,14 @@ class GTAOverlay:
                 time.sleep(1)
         
         threading.Thread(target=hotkey_loop, daemon=True).start()
-        
-        # Запускаем мониторинг состояния игры
-        def game_monitor_loop():
-            while True:
-                time.sleep(0.3)  # Проверяем каждые 0.3 секунды
-                self.check_game_state()
-        
-        threading.Thread(target=game_monitor_loop, daemon=True).start()
-    
-    def check_game_state(self):
-        """Проверяет состояние игры и автоматически переключает click-through"""
-        global is_moving_mode
-        try:
-            game_active = is_game_active()
-            
-            # Если режим перемещения включен, не меняем click-through автоматически
-            if is_moving_mode:
-                return
-            
-            # Если состояние изменилось
-            if game_active != self.is_game_was_active:
-                if game_active:
-                    # Игра стала активной - включаем click-through
-                    SETTINGS['click_through'] = True
-                    save_settings_to_file()
-                    apply_click_through_to_window()
-                    logger.info("Game activated, enabling click-through")
-                    
-                    # Уведомляем интерфейс
-                    try:
-                        if self.window:
-                            self.window.evaluate_js('showNotification("Режим игры: клики проходят сквозь окно")')
-                    except:
-                        pass
-                else:
-                    # Игра стала неактивной - выключаем click-through
-                    SETTINGS['click_through'] = False
-                    save_settings_to_file()
-                    apply_click_through_to_window()
-                    logger.info("Game deactivated, disabling click-through")
-                    
-                    # Уведомляем интерфейс
-                    try:
-                        if self.window:
-                            self.window.evaluate_js('showNotification("Режим рабочего стола: окно активно")')
-                    except:
-                        pass
-                
-                self.is_game_was_active = game_active
-                
-        except Exception as e:
-            logger.error(f"Error in game state check: {e}")
     
     def toggle_click_through_mode(self):
-        """Ручное переключение click-through режима"""
         global is_moving_mode
-        is_moving_mode = False  # Выключаем режим перемещения
+        is_moving_mode = False
         SETTINGS['click_through'] = not SETTINGS.get('click_through', False)
         save_settings_to_file()
         apply_click_through_to_window()
         
-        # Показываем уведомление в окне
         try:
             if self.window:
                 state = "включен" if SETTINGS['click_through'] else "выключен"
@@ -574,12 +683,10 @@ class GTAOverlay:
             pass
     
     def toggle_moving_mode(self):
-        """Переключает режим перемещения окна"""
         global is_moving_mode
         is_moving_mode = not is_moving_mode
         apply_click_through_to_window()
         
-        # Показываем уведомление в окне
         try:
             if self.window:
                 state = "включен" if is_moving_mode else "выключен"
@@ -600,12 +707,9 @@ class GTAOverlay:
             pass
 
 def main():
-    """Основная функция"""
-    # Создаем окно загрузки
     loading = LoadingWindow()
-    loading.update_status("Инициализация...")
+    loading.update_status("Загрузка данных...")
     
-    # Запускаем приложение
     overlay = GTAOverlay()
     overlay.create_window(loading)
 
